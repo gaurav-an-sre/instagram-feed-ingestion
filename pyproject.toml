@@ -1,0 +1,15 @@
+[project]
+name = "instagram-feed-ingestion"
+version = "1.0.0"
+description = "Application for ingesting Instagram feed data using the Instagram Graph API"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
