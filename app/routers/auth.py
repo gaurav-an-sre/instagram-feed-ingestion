@@ -31,68 +31,73 @@ async def auth_callback(
     db: Session = Depends(get_db),
 ):
     client = InstagramClient()
-
     try:
-        token_data = await client.exchange_code_for_token(code)
-    except Exception as e:
-        logger.exception("Failed to exchange code for token")
-        raise HTTPException(
-            status_code=400,
-            detail=f"Failed to exchange authorization code: {e}",
-        ) from e
+        try:
+            token_data = await client.exchange_code_for_token(code)
+        except Exception as e:
+            logger.exception("Failed to exchange code for token")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to exchange authorization code: {e}",
+            ) from e
 
-    short_lived_token = token_data.get("access_token", "")
-    user_id = str(token_data.get("user_id", ""))
+        short_lived_token = token_data.get("access_token", "")
+        user_id = str(token_data.get("user_id", ""))
 
-    try:
-        long_lived_data = await client.get_long_lived_token(short_lived_token)
-        access_token = long_lived_data.get("access_token", short_lived_token)
-        expires_at = long_lived_data.get("expires_at")
-        token_type = "long_lived"
-    except Exception:
-        logger.warning("Failed to get long-lived token, using short-lived")
-        access_token = short_lived_token
-        expires_at = datetime.utcnow() + timedelta(hours=1)
-        token_type = "short_lived"
+        try:
+            long_lived_data = await client.get_long_lived_token(
+                short_lived_token
+            )
+            access_token = long_lived_data.get(
+                "access_token", short_lived_token
+            )
+            expires_at = long_lived_data.get("expires_at")
+            token_type = "long_lived"
+        except Exception:
+            logger.warning("Failed to get long-lived token, using short-lived")
+            access_token = short_lived_token
+            expires_at = datetime.utcnow() + timedelta(hours=1)
+            token_type = "short_lived"
 
-    profile_client = InstagramClient(access_token=access_token)
-    try:
-        profile = await profile_client.get_user_profile()
-        username = profile.get("username")
-    except Exception:
-        username = None
-    finally:
-        await profile_client.close()
+        profile_client = InstagramClient(access_token=access_token)
+        try:
+            profile = await profile_client.get_user_profile()
+            username = profile.get("username")
+        except Exception:
+            username = None
+        finally:
+            await profile_client.close()
 
-    existing = (
-        db.query(InstagramAccount)
-        .filter(InstagramAccount.instagram_user_id == user_id)
-        .first()
-    )
-    if existing:
-        existing.access_token = access_token
-        existing.token_type = token_type
-        existing.token_expires_at = expires_at
-        existing.username = username or existing.username
-        existing.updated_at = datetime.utcnow()
-    else:
-        account = InstagramAccount(
+        existing = (
+            db.query(InstagramAccount)
+            .filter(InstagramAccount.instagram_user_id == user_id)
+            .first()
+        )
+        if existing:
+            existing.access_token = access_token
+            existing.token_type = token_type
+            existing.token_expires_at = expires_at
+            existing.username = username or existing.username
+            existing.updated_at = datetime.utcnow()
+        else:
+            account = InstagramAccount(
+                instagram_user_id=user_id,
+                username=username,
+                access_token=access_token,
+                token_type=token_type,
+                token_expires_at=expires_at,
+            )
+            db.add(account)
+
+        db.commit()
+
+        return TokenExchangeResponse(
+            message="Authentication successful",
             instagram_user_id=user_id,
             username=username,
-            access_token=access_token,
-            token_type=token_type,
-            token_expires_at=expires_at,
         )
-        db.add(account)
-
-    db.commit()
-    await client.close()
-
-    return TokenExchangeResponse(
-        message="Authentication successful",
-        instagram_user_id=user_id,
-        username=username,
-    )
+    finally:
+        await client.close()
 
 
 @router.post("/token", response_model=TokenExchangeResponse)

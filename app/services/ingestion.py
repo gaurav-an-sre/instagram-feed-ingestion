@@ -49,8 +49,8 @@ async def ingest_feed_for_account(
     db.add(log)
     db.commit()
 
+    client = InstagramClient(access_token=account.access_token)
     try:
-        client = InstagramClient(access_token=account.access_token)
         media_items = await client.get_all_user_media()
         new_count = 0
 
@@ -139,7 +139,6 @@ async def ingest_feed_for_account(
         log.completed_at = datetime.utcnow()
         db.commit()
 
-        await client.close()
         logger.info(
             "Ingestion completed for user %s: %d new media items",
             account.instagram_user_id,
@@ -156,6 +155,8 @@ async def ingest_feed_for_account(
             "Ingestion failed for user %s", account.instagram_user_id
         )
         raise
+    finally:
+        await client.close()
 
 
 async def ingest_all_accounts(db: Session) -> dict[str, int]:

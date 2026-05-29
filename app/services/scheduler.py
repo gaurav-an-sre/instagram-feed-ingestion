@@ -1,4 +1,3 @@
-import asyncio
 import logging
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -32,15 +31,10 @@ async def scheduled_ingestion():
         db.close()
 
 
-def _run_ingestion():
-    loop = asyncio.get_event_loop()
-    loop.create_task(scheduled_ingestion())
-
-
 def start_scheduler():
     interval = settings.ingestion_interval_minutes
     scheduler.add_job(
-        _run_ingestion,
+        scheduled_ingestion,
         "interval",
         minutes=interval,
         id="instagram_ingestion",
